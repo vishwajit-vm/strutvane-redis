@@ -1,6 +1,6 @@
 {
   "name": "@strutvane/redis",
-  "version": "0.1.0",
+  "version": "0.2.0-next.0",
   "description": "Redis and Valkey for Strutvane apps: a cache store, atomic locks, a session store, rate limiting, an idempotency store and an experimental queue driver, with per-app and per-tenant key prefixes.",
   "keywords": [
     "strutvane",

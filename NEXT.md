@@ -28,6 +28,19 @@ npm run test:integration    # needs Docker (Linux containers); removes its conta
 Never commit a `file:` spec or a lockfile pointing at the tarball; the lockfile's framework entry
 has a registry URL and no integrity hash until the framework is published (same as auth).
 
+## Stopped here (2026-11-18, usage-limit STOP)
+
+- Versioned to `0.2.0-next.0` (changeset pre mode `next`, CHANGELOG written); lockfile version synced.
+- `npx biome check .` reports errors (not looked at yet; likely formatting in new files): run
+  `npx biome check --write .` and re-check.
+- Last integration run (framework tarball from fix/release-0.2 f658430, installed with --no-save):
+  2 files failed to load (`test/integration/cache-store.test.ts`, `test/integration/stores.test.ts`,
+  a collection error, not an assertion: see the first lines of the run) and 5 files skipped as a
+  consequence of the setup state; 55 passed. Earlier full run (before the timing fixes): 123/126
+  passed, the 3 failures were timing-sensitive tests since widened. Unit gate: 55/55 passed once
+  (agent-reported).
+- No container left running.
+
 ## Half-done / next
 
 1. Run the full gate 3× (unit `npm run ci` + `npm run test:integration`) and record results in
