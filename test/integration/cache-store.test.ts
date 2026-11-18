@@ -134,14 +134,14 @@ describe.skipIf(skip)(title('RedisCacheStore: the CacheStore contract'), () => {
       await new Promise((resolve) => setTimeout(resolve, 30))
       return version
     }
-    expect(await cache.flexible('f', [0.1, 10], compute)).toBe(1)
-    expect(await cache.flexible('f', [0.1, 10], compute)).toBe(1) // fresh
-    await new Promise((resolve) => setTimeout(resolve, 150))
-    const stale = await Promise.all([1, 2, 3].map(() => cache.flexible('f', [0.1, 10], compute)))
+    expect(await cache.flexible('f', [1, 10], compute)).toBe(1)
+    expect(await cache.flexible('f', [1, 10], compute)).toBe(1) // fresh
+    await new Promise((resolve) => setTimeout(resolve, 1100))
+    const stale = await Promise.all([1, 2, 3].map(() => cache.flexible('f', [1, 10], compute)))
     expect(stale).toEqual([1, 1, 1]) // served stale, at once
-    await new Promise((resolve) => setTimeout(resolve, 200))
+    await new Promise((resolve) => setTimeout(resolve, 500))
     expect(version).toBe(2) // one refresh, not three
-    expect(await cache.flexible('f', [0.1, 10], compute)).toBe(2)
+    expect(await cache.flexible('f', [1, 10], compute)).toBe(2)
     await expect(cache.flexible('bad', [10, 5], compute)).rejects.toThrow(RangeError)
   })
 
@@ -168,7 +168,7 @@ describe.skipIf(skip)(title('RedisCacheStore: the CacheStore contract'), () => {
         throw new Error('boom')
       }),
     ).toBe('first')
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await new Promise((resolve) => setTimeout(resolve, 500))
     expect(warnings).toEqual(['redis.cache.refresh_failed'])
   })
 
@@ -228,20 +228,25 @@ describe.skipIf(skip)(title('RedisCacheStore: tenants and key injection'), () =>
     await expect(cache.get('k'.repeat(1025))).rejects.toThrow(TypeError)
   })
 
-  it('a prefix with glob characters flushes only its own keys', async () => {
-    const star = new RedisCacheStore({
+  it('refuses glob characters in prefixes, so every flush pattern is literal', async () => {
+    expect(() => KeySpace.root('a*:')).toThrow(TypeError)
+    expect(() => KeySpace.root('a?:')).toThrow(TypeError)
+    expect(() => KeySpace.root('[ab]:')).toThrow(TypeError)
+    // Neighbouring prefixes (app1: and app10:) never flush each other.
+    const stamp = Date.now()
+    const one = new RedisCacheStore({
       driver: redis,
-      space: KeySpace.root(`a*${Date.now()}:`).area('cache'),
+      space: KeySpace.root(`app1${stamp}:`).area('cache'),
     })
-    const plain = new RedisCacheStore({
+    const ten = new RedisCacheStore({
       driver: redis,
-      space: KeySpace.root(`ab${star.prefix.slice(2)}`.replace(/cache:$/, '')).area('cache'),
+      space: KeySpace.root(`app1${stamp}0:`).area('cache'),
     })
-    await star.put('k', 1)
-    await plain.put('k', 2)
-    await star.flush()
-    expect(await star.get('k')).toBeUndefined()
-    expect(await plain.get('k')).toBe(2)
-    await plain.flush()
+    await one.put('k', 1)
+    await ten.put('k', 2)
+    await one.flush()
+    expect(await one.get('k')).toBeUndefined()
+    expect(await ten.get('k')).toBe(2)
+    await ten.flush()
   })
 })

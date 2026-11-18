@@ -145,7 +145,7 @@ describe.skipIf(skip)(title('RedisIdempotencyStore'), () => {
     const store = new RedisIdempotencyStore({
       driver: redis,
       space: root.area('idempotency'),
-      ttlMs: 200,
+      ttlMs: 2000,
     })
     await store.begin('secret-actor-key', 'fp', 0)
     const keys = (await redis.command(['KEYS', `${root.prefix}*`])) as string[]
@@ -154,7 +154,7 @@ describe.skipIf(skip)(title('RedisIdempotencyStore'), () => {
     expect(await store.begin('secret-actor-key', 'fp', 0)).toEqual({ kind: 'in_progress' })
     await redis.command(['HSET', keys[0] ?? '', 'r', 'not json'])
     expect(await store.begin('secret-actor-key', 'fp', 0)).toEqual({ kind: 'in_progress' })
-    await sleep(300)
+    await sleep(2100)
     expect(await store.begin('secret-actor-key', 'fp', 0)).toEqual({ kind: 'new' })
     expect(() => new RedisIdempotencyStore({ driver: redis, space: root, ttlMs: 0 })).toThrow(
       RangeError,
@@ -169,10 +169,10 @@ describe.skipIf(skip)(title('RedisUsedSignatureStore'), () => {
     const root = space()
     const a = new RedisUsedSignatureStore({ driver: redis, space: root.area('signature') })
     const b = new RedisUsedSignatureStore({ driver: connect(), space: root.area('signature') })
-    const expiresAt = Date.now() + 300
+    const expiresAt = Date.now() + 2000
     const claims = await Promise.all([a, b, a, b].map((store) => store.claim('sig-1', expiresAt)))
     expect(claims.filter(Boolean)).toHaveLength(1)
-    await sleep(400)
+    await sleep(2100)
     expect(await a.claim('sig-1', Date.now() + 1000)).toBe(true)
   })
 

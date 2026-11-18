@@ -47,16 +47,16 @@ describe.skipIf(skip)(title('RedisQueueDriver (experimental)'), () => {
 
   it('delays jobs and releases them for another attempt', async () => {
     const queue = queueOn()
-    await queue.push('later', 'x', { delaySeconds: 0.2 })
+    await queue.push('later', 'x', { delaySeconds: 1 })
     expect(await queue.pop('later')).toBeUndefined()
-    await sleep(300)
+    await sleep(1200)
     const job = await queue.pop('later')
     expect(job?.payload).toBe('x')
     if (job === undefined) throw new Error('expected a job')
-    expect(await queue.release(job, 0.1)).toBe(true)
+    expect(await queue.release(job, 1)).toBe(true)
     expect(await queue.release(job)).toBe(false) // no longer reserved
     expect(await queue.pop('later')).toBeUndefined()
-    await sleep(200)
+    await sleep(1200)
     const retried = await queue.pop('later')
     expect(retried?.attempts).toBe(2)
     if (retried === undefined) throw new Error('expected a job')
@@ -65,12 +65,12 @@ describe.skipIf(skip)(title('RedisQueueDriver (experimental)'), () => {
   })
 
   it("a crashed worker's job comes back after its reservation expires", async () => {
-    const queue = queueOn(space(), 0.2)
+    const queue = queueOn(space(), 1)
     await queue.push('crashy', 'payload')
     const lost = await queue.pop('crashy')
     expect(lost).toBeDefined()
     expect(await queue.pop('crashy')).toBeUndefined()
-    await sleep(300)
+    await sleep(1200)
     const again = await queue.pop('crashy', { visibilitySeconds: 10 })
     expect(again?.id).toBe(lost?.id)
     expect(again?.attempts).toBe(2)

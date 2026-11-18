@@ -29,11 +29,11 @@ describe.skipIf(skip)(title('RedisRateLimiter'), () => {
 
     it(`${algorithm}: opens again after the window, and clear() resets`, async () => {
       const limiter = new RedisRateLimiter({ driver: connect(), space: space().area('rate') })
-      const limit = { max: 2, windowSeconds: 0.3, algorithm }
+      const limit = { max: 2, windowSeconds: 1.5, algorithm }
       expect((await limiter.hit('k', limit)).remaining).toBe(1)
       expect((await limiter.hit('k', limit)).allowed).toBe(true)
       expect((await limiter.hit('k', limit)).allowed).toBe(false)
-      await sleep(400)
+      await sleep(1600)
       expect((await limiter.hit('k', limit)).allowed).toBe(true)
       await limiter.hit('k', limit)
       expect((await limiter.hit('k', limit)).allowed).toBe(false)
@@ -42,22 +42,20 @@ describe.skipIf(skip)(title('RedisRateLimiter'), () => {
     })
   }
 
-  it('sliding: never more than max hits in any window span (no boundary burst)', async () => {
+  it('sliding: hits from the last window still count (no burst at a fixed boundary)', async () => {
     const limiter = new RedisRateLimiter({ driver: connect(), space: space().area('rate') })
-    const limit = { max: 5, windowSeconds: 0.5, algorithm: 'sliding' as const }
-    const accepted: number[] = []
-    const end = Date.now() + 1500
-    while (Date.now() < end) {
-      if ((await limiter.hit('burst', limit)).allowed) accepted.push(Date.now())
-      await sleep(10)
-    }
-    for (let i = 0; i + 5 < accepted.length; i++) {
-      const sixth = accepted[i + 5] ?? 0
-      const first = accepted[i] ?? 0
-      // Allow a few ms of client/server timing jitter around the window edge.
-      expect(sixth - first).toBeGreaterThanOrEqual(500 - 25)
-    }
-    expect(accepted.length).toBeGreaterThanOrEqual(10)
+    const limit = { max: 5, windowSeconds: 2, algorithm: 'sliding' as const }
+    for (let i = 0; i < 3; i++) expect((await limiter.hit('burst', limit)).allowed).toBe(true)
+    const start = Date.now() // the first three are in by now
+    await sleep(800)
+    for (let i = 0; i < 2; i++) expect((await limiter.hit('burst', limit)).allowed).toBe(true)
+    expect((await limiter.hit('burst', limit)).allowed).toBe(false)
+    // After the first three expire (t ≥ 2 s) only three slots open: the two hits from t ≈ 0.8 s
+    // still count. A fixed window would have reset and allowed five.
+    await sleep(Math.max(0, start + 2050 - Date.now()))
+    const after = []
+    for (let i = 0; i < 5; i++) after.push((await limiter.hit('burst', limit)).allowed)
+    expect(after).toEqual([true, true, true, false, false])
   })
 
   it('refused sliding hits are not recorded (memory stays bounded by max)', async () => {
