@@ -1,0 +1,106 @@
+{
+  "name": "@strutvane/redis",
+  "version": "0.1.0",
+  "description": "Redis and Valkey for Strutvane apps: a cache store, atomic locks, a session store, rate limiting, an idempotency store and an experimental queue driver, with per-app and per-tenant key prefixes.",
+  "keywords": [
+    "strutvane",
+    "typescript",
+    "redis",
+    "valkey",
+    "cache",
+    "locks",
+    "sessions",
+    "rate-limit",
+    "queue"
+  ],
+  "homepage": "https://github.com/vishwajit-vm/strutvane-redis#readme",
+  "bugs": {
+    "url": "https://github.com/vishwajit-vm/strutvane-redis/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vishwajit-vm/strutvane-redis.git"
+  },
+  "license": "MIT",
+  "author": "The Strutvane Authors",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./provider": {
+      "types": "./dist/provider.d.mts",
+      "default": "./dist/provider.mjs"
+    },
+    "./installer": {
+      "types": "./dist/installer.d.mts",
+      "default": "./dist/installer.mjs"
+    },
+    "./queue": {
+      "types": "./dist/queue.d.mts",
+      "default": "./dist/queue.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=24.3"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.19.0",
+      "onFail": "error"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsdown",
+    "ci": "biome check . && tsc --noEmit && vitest run --coverage && tsdown",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish",
+    "test:perf": "vitest run --config vitest.perf.config.ts"
+  },
+  "strutvane": {
+    "compat": "^0.2.0-next.0",
+    "installer": "./dist/installer.mjs"
+  },
+  "dependencies": {
+    "@redis/client": "6.3.1"
+  },
+  "peerDependencies": {
+    "@strutvane/framework": "^0.2.0-next.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.7",
+    "@changesets/cli": "3.0.3",
+    "@strutvane/framework": "0.2.0-next.0",
+    "@types/node": "24.19.2",
+    "@vitest/coverage-v8": "5.1.0",
+    "fast-check": "4.10.2",
+    "tsdown": "0.23.7",
+    "typescript": "6.0.3",
+    "vitest": "5.1.0"
+  },
+  "allowScripts": {
+    "esbuild@0.18.20": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": false
+  }
+}
