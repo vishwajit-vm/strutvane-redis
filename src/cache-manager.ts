@@ -132,12 +132,14 @@ function split(value: unknown): Split {
       frameworkStores[store] = entry
       continue
     }
-    const area = (entry as { area?: unknown }).area ?? 'cache'
+    // `{ driver: 'redis', area? }`, or just the driver name (the framework accepts both).
+    const options: object = typeof entry === 'object' && entry !== null ? entry : {}
+    const area = (options as { area?: unknown }).area ?? 'cache'
     if (typeof area !== 'string' || !/^[a-z][a-z0-9_-]{0,31}$/.test(area))
       throw invalid(
         `cache.stores.${store}.area must be a short lowercase name (letters, digits, _ and -, starting with a letter).`,
       )
-    for (const key of Object.keys(entry as object))
+    for (const key of Object.keys(options))
       if (key !== 'driver' && key !== 'area')
         throw invalid(
           `cache.stores.${store} has an unknown key "${key}" (a redis store takes driver and area).`,

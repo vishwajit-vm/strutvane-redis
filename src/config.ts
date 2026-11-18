@@ -204,6 +204,7 @@ export function describeSettings(settings: RedisSettings): Readonly<Record<strin
 export function defaultPrefix(appName: string | undefined): string {
   const slug = (appName ?? '')
     .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')

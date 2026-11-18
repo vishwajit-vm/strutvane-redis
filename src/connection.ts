@@ -30,6 +30,7 @@
 import { readFileSync } from 'node:fs'
 import { createClient } from '@redis/client'
 import { BootError } from '@strutvane/framework'
+import { StrutvaneError } from '@strutvane/framework/core'
 import type { Logger } from '@strutvane/framework/contracts'
 import { describeSettings, type RedisSettings } from './config.ts'
 import type { LuaScript, RedisDriver } from './driver.ts'
@@ -79,6 +80,9 @@ export interface RedisConnectionOptions {
 
 /** Server error prefixes that mean "you may not": wrong login or missing ACL permission. */
 const AUTH_ERRORS = /^(WRONGPASS|NOAUTH|NOPERM)\b/
+/** Socket error codes that may only appear in the message (node-redis wraps some errors). */
+const NETWORK_ERROR =
+  /E(?:CONNREFUSED|CONNRESET|TIMEDOUT|NOTFOUND|PIPE|HOSTUNREACH|NETUNREACH|AI_AGAIN)/
 /** Client-side error names that mean "the server is not reachable right now". */
 const UNREACHABLE = new Set([
   'ClientClosedError',
@@ -232,7 +236,10 @@ export class RedisConnection implements RedisDriver {
         // Already closed by the failed connect; nothing left to release.
       }
       this.#markDown(error)
-      throw this.#translate(error, 'connect')
+      // Whatever stopped the connect (refused, timeout, TLS, a wrong login), the caller gets the
+      // same fail-closed 503; the log has the reason.
+      const translated = this.#translate(error, 'connect')
+      throw translated instanceof StrutvaneError ? translated : redisUnavailable('connect', error)
     }
     if (this.#closed) {
       // close() ran while we were connecting: don't leak the socket.
@@ -304,6 +311,7 @@ export class RedisConnection implements RedisDriver {
     if (
       UNREACHABLE.has(error.name) ||
       (typeof code === 'string' && /^E[A-Z]+$/.test(code)) ||
+      NETWORK_ERROR.test(error.message) ||
       /certificate|self[- ]signed|TLS|SSL/i.test(error.message)
     )
       return redisUnavailable(operation, error)

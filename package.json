@@ -69,6 +69,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts --coverage",
     "build": "tsdown",
     "ci": "biome check . && tsc --noEmit && vitest run --coverage && tsdown",
     "changeset": "changeset",

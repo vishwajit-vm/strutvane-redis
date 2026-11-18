@@ -216,6 +216,7 @@ function isRedisStore(cacheConfig: unknown, name: string): boolean {
       ? (stores as Record<string, unknown>)[name]
       : undefined
   if (entry === undefined) return name === 'redis'
+  if (entry === 'redis') return true
   return (
     typeof entry === 'object' &&
     entry !== null &&
