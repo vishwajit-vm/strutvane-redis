@@ -1,6 +1,6 @@
 # NEXT.md: strutvane-redis, branch `v2/redis`
 
-Last updated 2026-11-18. Read with `CLAUDE.md`/`.claude/ECOSYSTEM.md` and the hub `STATE.md`.
+Last updated 2026-11-20. Read with `CLAUDE.md`/`.claude/ECOSYSTEM.md` and the hub `STATE.md`.
 
 ## Done
 
@@ -19,32 +19,29 @@ Last updated 2026-11-18. Read with `CLAUDE.md`/`.claude/ECOSYSTEM.md` and the hu
 ## How to verify
 
 ```bash
-# framework 0.2.0-next.0 is not on npm: pack it from fix/release-0.2 and install it without saving
-npm install --no-save --ignore-scripts <path>/strutvane-framework-0.2.0-next.0.tgz
-npm run ci
-npm run test:integration    # needs Docker (Linux containers); removes its container afterwards
+npm ci                      # the lockfile resolves only from the registry (framework 0.2.0-next.1)
+npm run ci                  # lint, typecheck, unit tests + coverage, build (no Redis needed)
+npm run test:integration    # needs Docker (Linux containers); one uniquely named container, removed after
 ```
 
-Never commit a `file:` spec or a lockfile pointing at the tarball; the lockfile's framework entry
-has a registry URL and no integrity hash until the framework is published (same as auth).
+## Status (2026-11-20, agent-reported until the coordinator re-runs)
 
-## Stopped here (2026-11-18, usage-limit STOP)
-
-- Versioned to `0.2.0-next.0` (changeset pre mode `next`, CHANGELOG written); lockfile version synced.
-- `npx biome check .` reports errors (not looked at yet; likely formatting in new files): run
-  `npx biome check --write .` and re-check.
-- Last integration run (framework tarball from fix/release-0.2 f658430, installed with --no-save):
-  2 files failed to load (`test/integration/cache-store.test.ts`, `test/integration/stores.test.ts`,
-  a collection error, not an assertion: see the first lines of the run) and 5 files skipped as a
-  consequence of the setup state; 55 passed. Earlier full run (before the timing fixes): 123/126
-  passed, the 3 failures were timing-sensitive tests since widened. Unit gate: 55/55 passed once
-  (agent-reported).
-- No container left running.
+- devDependency `@strutvane/framework` is the published `0.2.0-next.1`; lockfile rebuilt from the
+  registry (no `link` entries); `allowScripts`: esbuild 0.18.20 / 0.25.12 / 0.28.2 true, fsevents
+  2.3.3 false; plain `npm ci` passes; `npm audit --omit=dev`: 0 vulnerabilities.
+- Gate 3× green at b93025e (Windows, Node 24.21, Redis 8.2.10-alpine container):
+  `npm run ci` 56/56 each run (coverage 98.78/93.54/99.02/99.31) and `npm run test:integration`
+  127/127 each run (99.25/95.27/100/99.85).
+- publint 0.3.25 `--strict`: all good. attw 0.18.5 `--profile esm-only`: exit 0.
+  `check-package.mjs`: 25 files. CHANGELOG has 0.2.0-next.0.
+- Fixed this session: a network-error regex that held literal backspace characters; skipped
+  integration suites (no Docker) failing to load; function coverage under 90% (lazy logger moved
+  to `src/lazy-logger.ts` with a test); a flush test that timed out under load.
 
 ## Half-done / next
 
-1. Run the full gate 3× (unit `npm run ci` + `npm run test:integration`) and record results in
-   `RELEASE-READINESS.md` (coordinator re-runs).
+1. Coordinator: re-run the gate 3× and accept or reject the R-rows in `RELEASE-READINESS.md`.
+   CI matrix (Linux/macOS, Node 26) has not run: the branch is not pushed.
 2. Valkey run: `REDIS_TEST_IMAGE=valkey/valkey:8-alpine npm run test:integration` (the image was not
    pulled on this machine; only Redis 8.2 is verified).
 3. Security review (`security-reviewer` agent) of the connection, key spaces and installer.

@@ -1,7 +1,7 @@
 # strutvane-redis
 
-> **Status: `0.2.0-next.0`, not on npm yet.** Built and tested against `@strutvane/framework`
-> `0.2.0-next.0` (branch `fix/release-0.2`), which is also not published yet. The queue driver is
+> **Status: `0.2.0-next.0`, not on npm yet.** Built and tested against the published
+> `@strutvane/framework` `0.2.0-next.1`. The queue driver is
 > **experimental** until framework queues land (0.3).
 
 **`@strutvane/redis`**: Redis and Valkey for [Strutvane](https://github.com/vishwajit-vm/strutvane)
