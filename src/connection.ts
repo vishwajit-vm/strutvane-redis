@@ -30,8 +30,8 @@
 import { readFileSync } from 'node:fs'
 import { createClient } from '@redis/client'
 import { BootError } from '@strutvane/framework'
-import { StrutvaneError } from '@strutvane/framework/core'
 import type { Logger } from '@strutvane/framework/contracts'
+import { StrutvaneError } from '@strutvane/framework/core'
 import { describeSettings, type RedisSettings } from './config.ts'
 import type { LuaScript, RedisDriver } from './driver.ts'
 import { redisUnavailable } from './errors.ts'
@@ -82,7 +82,7 @@ export interface RedisConnectionOptions {
 const AUTH_ERRORS = /^(WRONGPASS|NOAUTH|NOPERM)\b/
 /** Socket error codes that may only appear in the message (node-redis wraps some errors). */
 const NETWORK_ERROR =
-  /E(?:CONNREFUSED|CONNRESET|TIMEDOUT|NOTFOUND|PIPE|HOSTUNREACH|NETUNREACH|AI_AGAIN)/
+  /\bE(?:CONNREFUSED|CONNRESET|TIMEDOUT|NOTFOUND|PIPE|HOSTUNREACH|NETUNREACH|AI_AGAIN)\b/
 /** Client-side error names that mean "the server is not reachable right now". */
 const UNREACHABLE = new Set([
   'ClientClosedError',

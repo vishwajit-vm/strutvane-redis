@@ -29,7 +29,8 @@ export function testSettings(env: Readonly<Record<string, string>> = {}): RedisS
   return resolveRedisSettings({
     env: {
       REDIS_HOST: server.host,
-      REDIS_PORT: String(server.port),
+      // A skipped suite still builds its connections at collection time; they are never used.
+      REDIS_PORT: String(server.port || 6379),
       REDIS_PREFIX: uniquePrefix(),
       REDIS_CONNECT_TIMEOUT: '3000',
       REDIS_COMMAND_TIMEOUT: '5000',
