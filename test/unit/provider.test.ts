@@ -88,6 +88,9 @@ describe('RedisServiceProvider', () => {
     await app.boot()
     expect(app.make(CacheManagerToken).store()).not.toBeInstanceOf(RedisCacheStore)
     expect(app.make(CacheManagerToken).store('redis')).toBeInstanceOf(RedisCacheStore)
+    // The file store reads the app clock for expiry (through the provider's lazy clock).
+    await app.make(CacheManagerToken).store('file').put('clock-check', 1, 60)
+    expect(await app.make(CacheManagerToken).store('file').ttl('clock-check')).toBe(60)
     expect(app.make(SessionStoreToken)).not.toBeInstanceOf(RedisSessionStore)
     expect(app.make(IdempotencyStoreToken)).not.toBeInstanceOf(RedisIdempotencyStore)
     await app.shutdown() // never connected: nothing to close

@@ -38,6 +38,7 @@ import { loadRedisEnv } from './env.ts'
 import { PACKAGE_NAME, REDIS_ERRORS } from './errors.ts'
 import { RedisIdempotencyStore } from './idempotency-store.ts'
 import { KeySpace } from './keys.ts'
+import { lazyLogger } from './lazy-logger.ts'
 import { RedisLocks } from './lock.ts'
 import { RedisRateLimiter } from './rate-limiter.ts'
 import { RedisSessionStore } from './session-store.ts'
@@ -222,26 +223,6 @@ function isRedisStore(cacheConfig: unknown, name: string): boolean {
     entry !== null &&
     (entry as { driver?: unknown }).driver === 'redis'
   )
-}
-
-/** A logger that resolves the app's logger on first use (it may not be bound at register time). */
-function lazyLogger(resolve: () => Logger): Logger {
-  let logger: Logger | undefined
-  const get = (): Logger => {
-    logger ??= resolve()
-    return logger
-  }
-  return {
-    trace: (msg, fields) => get().trace(msg, fields),
-    debug: (msg, fields) => get().debug(msg, fields),
-    info: (msg, fields) => get().info(msg, fields),
-    warn: (msg, fields) => get().warn(msg, fields),
-    error: (msg, fields) => get().error(msg, fields),
-    fatal: (msg, fields) => get().fatal(msg, fields),
-    child: (bindings) => get().child(bindings),
-    isLevelEnabled: (level) => get().isLevelEnabled(level),
-    flush: () => get().flush(),
-  }
 }
 
 function isLocalHost(host: string): boolean {
