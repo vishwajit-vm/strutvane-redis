@@ -90,7 +90,10 @@ describe.skipIf(skip)(title('RedisCacheStore: the CacheStore contract'), () => {
     await reports.put('a', 2)
     expect(await cache.forget('a')).toBe(true)
     expect(await cache.forget('a')).toBe(false)
-    for (let i = 0; i < 1200; i++) await cache.put(`bulk:${i}`, i)
+    // More keys than one SCAN batch, written in one script (1,200 round trips time out under load).
+    await cache.putMany(
+      Object.fromEntries(Array.from({ length: 1200 }, (_, i) => [`bulk:${i}`, i])),
+    )
     await cache.flush()
     expect(await cache.get('bulk:5')).toBeUndefined()
     expect(await reports.get('a')).toBe(2)
