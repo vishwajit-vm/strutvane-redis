@@ -31,6 +31,7 @@ import {
 } from '@strutvane/framework'
 import type { Logger } from '@strutvane/framework/contracts'
 import { ClockToken, ErrorRegistryToken, LoggerToken } from '@strutvane/framework/core'
+import { INTERNAL_AREAS } from './areas.ts'
 import { createRedisCacheManager } from './cache-manager.ts'
 import { describeSettings, type RedisSettings, resolveRedisSettings } from './config.ts'
 import { RedisConnection } from './connection.ts'
@@ -113,11 +114,11 @@ export class RedisServiceProvider extends ServiceProvider {
     container.value(RedisKeySpaceToken, root)
     container.singleton(
       RedisLocksToken,
-      () => new RedisLocks({ driver: connection(), space: root.area('lock') }),
+      () => new RedisLocks({ driver: connection(), space: root.area(INTERNAL_AREAS.lock) }),
     )
     container.singleton(
       RedisRateLimiterToken,
-      () => new RedisRateLimiter({ driver: connection(), space: root.area('rate') }),
+      () => new RedisRateLimiter({ driver: connection(), space: root.area(INTERNAL_AREAS.rate) }),
     )
 
     const cacheConfig = read('cache')
@@ -131,7 +132,7 @@ export class RedisServiceProvider extends ServiceProvider {
         () =>
           new RedisSessionStore({
             driver: connection(),
-            space: root.area('session'),
+            space: root.area(INTERNAL_AREAS.session),
             ...(typeof lifetimeMinutes === 'number'
               ? { lifetimeSeconds: lifetimeMinutes * 60 }
               : {}),
@@ -142,7 +143,11 @@ export class RedisServiceProvider extends ServiceProvider {
     if (cache.defaultIsRedis)
       container.singleton(
         IdempotencyStoreToken,
-        () => new RedisIdempotencyStore({ driver: connection(), space: root.area('idempotency') }),
+        () =>
+          new RedisIdempotencyStore({
+            driver: connection(),
+            space: root.area(INTERNAL_AREAS.idempotency),
+          }),
       )
   }
 

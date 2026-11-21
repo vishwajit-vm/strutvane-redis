@@ -74,7 +74,7 @@ interface Envelope {
  *
  * @experimental
  * @example
- * const queue = new RedisQueueDriver({ driver: redis, space: KeySpace.root('blog:').area('queue') })
+ * const queue = new RedisQueueDriver({ driver: redis, space: KeySpace.root('blog:prod:').area('queue') })
  * await queue.push('emails', JSON.stringify({ to: 'a@example.com' }))
  */
 export class RedisQueueDriver implements QueueDriver {

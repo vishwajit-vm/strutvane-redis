@@ -86,7 +86,7 @@ return {0, count, retry}
  * A rate limiter in one key space.
  *
  * @example
- * const limiter = new RedisRateLimiter({ driver: redis, space: KeySpace.root('blog:').area('rate') })
+ * const limiter = new RedisRateLimiter({ driver: redis, space: KeySpace.root('blog:prod:').area('rate') })
  * const result = await limiter.hit(`login:${email}`, { max: 5, windowSeconds: 60, algorithm: 'sliding' })
  */
 export class RedisRateLimiter {

@@ -29,7 +29,7 @@ const SESSION_ID = /^[A-Za-z0-9_-]{22,256}$/
  * Options for {@link RedisSessionStore}.
  *
  * @example
- * new RedisSessionStore({ driver: redis, space: KeySpace.root('blog:').area('session'), lifetimeSeconds: 7200 })
+ * new RedisSessionStore({ driver: redis, space: KeySpace.root('blog:prod:').area('session'), lifetimeSeconds: 7200 })
  */
 export interface RedisSessionStoreOptions {
   readonly driver: RedisDriver

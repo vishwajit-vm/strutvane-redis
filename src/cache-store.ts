@@ -32,7 +32,7 @@ import type { KeySpace } from './keys.ts'
  * Options for {@link RedisCacheStore}.
  *
  * @example
- * new RedisCacheStore({ driver: redis, space: KeySpace.root('blog:').area('cache') })
+ * new RedisCacheStore({ driver: redis, space: KeySpace.root('blog:prod:').area('cache') })
  */
 export interface RedisCacheStoreOptions {
   readonly driver: RedisDriver
@@ -78,7 +78,7 @@ interface FlexibleEntry {
  * A cache store in Redis or Valkey.
  *
  * @example
- * const cache = new RedisCacheStore({ driver: redis, space: KeySpace.root('blog:').area('cache') })
+ * const cache = new RedisCacheStore({ driver: redis, space: KeySpace.root('blog:prod:').area('cache') })
  * await cache.put('stats', { posts: 3 }, 60)
  * await cache.forTenant('acme').get('stats') // undefined: another namespace
  */

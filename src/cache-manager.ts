@@ -14,7 +14,9 @@
  * ```
  *
  * A `redis` store always exists (like `memory` and `file`), so `CACHE_STORE=redis` works without
- * editing `config/cache.ts`. A bad store entry stops boot with a friendly error.
+ * editing `config/cache.ts`. A bad store entry stops boot with a friendly error, and so does an
+ * `area` this package uses for itself (`session`, `lock`, `rate`, `idempotency`, `queue`,
+ * `signature`; see `areas.ts`): `cache:clear` on such a store would wipe sessions or locks.
  *
  * @module
  */
@@ -26,6 +28,7 @@ import {
 } from '@strutvane/framework'
 import type { Logger } from '@strutvane/framework/contracts'
 import type { Clock } from '@strutvane/framework/core'
+import { RESERVED_AREAS } from './areas.ts'
 import { RedisCacheStore } from './cache-store.ts'
 import type { RedisDriver } from './driver.ts'
 import type { KeySpace } from './keys.ts'
@@ -38,7 +41,7 @@ import type { KeySpace } from './keys.ts'
  */
 export interface RedisCacheStoreConfig {
   readonly driver: 'redis'
-  /** The key area after the app prefix. Default `cache`. */
+  /** The key area after the app prefix. Default `cache`. Not one of the reserved areas (`RESERVED_AREAS`). */
   readonly area?: string
 }
 
@@ -138,6 +141,10 @@ function split(value: unknown): Split {
     if (typeof area !== 'string' || !/^[a-z][a-z0-9_-]{0,31}$/.test(area))
       throw invalid(
         `cache.stores.${store}.area must be a short lowercase name (letters, digits, _ and -, starting with a letter).`,
+      )
+    if (RESERVED_AREAS.has(area))
+      throw invalid(
+        `cache.stores.${store}.area "${area}" is used by Redis sessions, locks, rate limits, idempotency, queues or signatures; choose another name (reserved: ${[...RESERVED_AREAS].join(', ')}).`,
       )
     for (const key of Object.keys(options))
       if (key !== 'driver' && key !== 'area')

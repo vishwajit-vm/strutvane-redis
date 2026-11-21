@@ -46,7 +46,7 @@ const OWNER = /^[A-Za-z0-9_-]{16,128}$/
  * Creates and restores locks in one key space.
  *
  * @example
- * const locks = new RedisLocks({ driver: redis, space: KeySpace.root('blog:').area('lock') })
+ * const locks = new RedisLocks({ driver: redis, space: KeySpace.root('blog:prod:').area('lock') })
  * await locks.create('reports:build', 120).block(10, () => buildReports())
  */
 export class RedisLocks {
