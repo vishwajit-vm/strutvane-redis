@@ -88,11 +88,49 @@ describe.skipIf(skip)(title('RedisQueueDriver (experimental)'), () => {
     ).toThrow(RangeError)
   })
 
-  it('refuses a corrupt job envelope loudly', async () => {
+  it('moves entries that are not jobs to :failed, as they were, and keeps serving real jobs', async () => {
     const root = space()
     const redis = connect()
     const queue = new RedisQueueDriver({ driver: redis, space: root.area('queue') })
-    await redis.command(['RPUSH', `${root.prefix}queue:broken`, '{"attempts":0}'])
-    await expect(queue.pop('broken')).rejects.toThrow('corrupt')
+    const ready = `${root.prefix}queue:mixed`
+    const junk = [
+      'not json at all',
+      '{"attempts":0}',
+      '"a string"',
+      '42',
+      '[1,2,3]',
+      '{"id":1,"payload":"x"}',
+      '{"id":"x","payload":{"nested":true}}',
+      `${'['.repeat(2000)}${']'.repeat(2000)}`,
+      '{"id":"x","payload":"y"',
+    ]
+    await redis.command(['RPUSH', ready, ...junk])
+    const id = await queue.push('mixed', 'real job')
+    // One pop moves every bad entry aside and reserves the real job behind them.
+    const job = await queue.pop('mixed')
+    expect(job?.id).toBe(id)
+    expect(job?.payload).toBe('real job')
+    expect(await redis.command(['LRANGE', `${ready}:failed`, '0', '-1'])).toEqual(junk)
+    expect(await queue.size('mixed')).toBe(1)
+    expect(job === undefined ? false : await queue.ack(job)).toBe(true)
+    // Only bad entries: pop answers "nothing to do", never an error.
+    await redis.command(['RPUSH', ready, 'still not json'])
+    expect(await queue.pop('mixed')).toBeUndefined()
+    expect(await redis.command(['LLEN', `${ready}:failed`])).toBe(junk.length + 1)
+    // clear removes the failed entries too.
+    await queue.clear('mixed')
+    expect(await redis.command(['EXISTS', `${ready}:failed`])).toBe(0)
+  })
+
+  it('gives up for one call after many bad entries in a row, and goes on at the next', async () => {
+    const root = space()
+    const redis = connect()
+    const queue = new RedisQueueDriver({ driver: redis, space: root.area('queue') })
+    const ready = `${root.prefix}queue:flood`
+    await redis.command(['RPUSH', ready, ...Array.from({ length: 150 }, (_, i) => `junk ${i}`)])
+    const id = await queue.push('flood', 'after the flood')
+    expect(await queue.pop('flood')).toBeUndefined()
+    expect((await queue.pop('flood'))?.id).toBe(id)
+    expect(await redis.command(['LLEN', `${ready}:failed`])).toBe(150)
   })
 })

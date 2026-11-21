@@ -5,11 +5,15 @@
  * - `<prefix>queue:<name>`: a list of waiting jobs;
  * - `<prefix>queue:<name>:delayed`: a sorted set of delayed jobs, scored by when they are due;
  * - `<prefix>queue:<name>:reserved`: a sorted set of reserved jobs, scored by when the
- *   reservation runs out.
+ *   reservation runs out;
+ * - `<prefix>queue:<name>:failed`: a list of entries that are not jobs at all (not JSON, or JSON
+ *   without an `id` and a `payload`), kept as they were for inspection.
  *
  * `pop` is one Lua script: it moves due delayed jobs and expired reservations back to the list,
  * then reserves the head, so two workers never get the same job, and a crashed worker's job comes
- * back by itself. Time is the server's (`TIME`), so workers with skewed clocks agree.
+ * back by itself. An entry that can't be decoded (written by something else, or damaged) is moved
+ * to the `:failed` list instead of stopping the queue: the decode runs under `pcall`, so one bad
+ * entry can never make every `pop` fail. Time is the server's (`TIME`), so workers with skewed clocks agree.
  *
  * Polling only (no `BLPOP`): a blocking pop would hold the app's shared connection. The framework's
  * future worker decides how often to poll.
@@ -31,6 +35,11 @@ redis.call('ZADD', KEYS[1], now + tonumber(ARGV[2]), ARGV[1])
 return 1
 `)
 
+/** What {@link POP} answers when the head of the list was not a job and went to `:failed`. */
+const MOVED_TO_FAILED = 'moved_to_failed'
+/** How many undecodable entries one `pop` moves aside before it gives up for this call. */
+const MAX_FAILED_PER_POP = 100
+
 const POP = defineLua(`
 local t = redis.call('TIME')
 local now = tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)
@@ -43,9 +52,18 @@ for _, set in ipairs({KEYS[2], KEYS[3]}) do
 end
 local job = redis.call('LPOP', KEYS[1])
 if not job then return false end
-local decoded = cjson.decode(job)
+local ok, decoded = pcall(cjson.decode, job)
+if not ok or type(decoded) ~= 'table' or type(decoded['id']) ~= 'string'
+  or type(decoded['payload']) ~= 'string' then
+  redis.call('RPUSH', KEYS[4], job)
+  return '${MOVED_TO_FAILED}'
+end
 decoded['attempts'] = (tonumber(decoded['attempts']) or 0) + 1
-local reserved = cjson.encode(decoded)
+local encoded, reserved = pcall(cjson.encode, decoded)
+if not encoded then
+  redis.call('RPUSH', KEYS[4], job)
+  return '${MOVED_TO_FAILED}'
+end
 local until_ms = now + tonumber(ARGV[1])
 redis.call('ZADD', KEYS[3], until_ms, reserved)
 return {reserved, tostring(until_ms)}
@@ -116,12 +134,17 @@ export class RedisQueueDriver implements QueueDriver {
       options.visibilitySeconds === undefined
         ? this.#visibilityMs
         : seconds(options.visibilitySeconds, 'visibilitySeconds')
-    const reply = await this.#driver.script(
-      POP,
-      [keys.ready, keys.delayed, keys.reserved],
-      [String(visibility)],
-    )
-    if (reply === null || reply === undefined) return undefined
+    let reply: unknown
+    // Entries that aren't jobs are moved aside one per script run; the next one is tried at once.
+    for (let moved = 0; moved <= MAX_FAILED_PER_POP; moved += 1) {
+      reply = await this.#driver.script(
+        POP,
+        [keys.ready, keys.delayed, keys.reserved, keys.failed],
+        [String(visibility)],
+      )
+      if (reply !== MOVED_TO_FAILED) break
+    }
+    if (reply === null || reply === undefined || reply === MOVED_TO_FAILED) return undefined
     const [receiptReply, untilReply] = asArray(reply)
     const receipt = asNullableString(receiptReply)
     if (receipt === null) return undefined
@@ -168,7 +191,7 @@ export class RedisQueueDriver implements QueueDriver {
   async clear(queue: string): Promise<number> {
     const size = await this.size(queue)
     const keys = this.#keys(queue)
-    await this.#driver.command(['UNLINK', keys.ready, keys.delayed, keys.reserved])
+    await this.#driver.command(['UNLINK', keys.ready, keys.delayed, keys.reserved, keys.failed])
     return size
   }
 
@@ -176,13 +199,19 @@ export class RedisQueueDriver implements QueueDriver {
     readonly ready: string
     readonly delayed: string
     readonly reserved: string
+    readonly failed: string
   } {
     if (!QUEUE_NAME.test(queue))
       throw new TypeError(
         'A queue name may only contain letters, digits, _ . and - (1 to 64 characters).',
       )
     const ready = this.#space.key(queue)
-    return { ready, delayed: `${ready}:delayed`, reserved: `${ready}:reserved` }
+    return {
+      ready,
+      delayed: `${ready}:delayed`,
+      reserved: `${ready}:reserved`,
+      failed: `${ready}:failed`,
+    }
   }
 }
 
