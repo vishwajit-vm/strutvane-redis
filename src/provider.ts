@@ -40,6 +40,7 @@ import { RedisIdempotencyStore } from './idempotency-store.ts'
 import { KeySpace } from './keys.ts'
 import { lazyLogger } from './lazy-logger.ts'
 import { RedisLocks } from './lock.ts'
+import { isLoopbackHost } from './loopback.ts'
 import { RedisRateLimiter } from './rate-limiter.ts'
 import { RedisSessionStore } from './session-store.ts'
 import {
@@ -152,7 +153,7 @@ export class RedisServiceProvider extends ServiceProvider {
     const settings = this.#settings
     if (settings === undefined || app.environment !== 'production') return
     const logger = app.make(LoggerToken).child({ component: 'redis' })
-    if (!settings.tls && !isLocalHost(settings.host))
+    if (!settings.tls && !isLoopbackHost(settings.host))
       logger.warn('redis.plaintext', {
         ...describeSettings(settings),
         hint: 'Use rediss:// or REDIS_TLS=true for a Redis server on another machine.',
@@ -226,8 +227,4 @@ function isRedisStore(cacheConfig: unknown, name: string): boolean {
     entry !== null &&
     (entry as { driver?: unknown }).driver === 'redis'
   )
-}
-
-function isLocalHost(host: string): boolean {
-  return host === 'localhost' || host === '::1' || host.startsWith('127.')
 }

@@ -123,8 +123,19 @@ describe('RedisServiceProvider', () => {
     expect((error as { code: string }).code).toBe('invalid_redis_config')
   })
 
-  it('warns in production about plain text to a remote host and a missing password', async () => {
+  it('stops boot in production for a remote host without an explicit TLS choice', async () => {
     const remote = makeApp({}, { REDIS_HOST: 'cache.internal' }, { APP_ENV: 'production' })
+    const error = await remote.app.boot().catch((caught: unknown) => caught)
+    expect(isBootError(error)).toBe(true)
+    expect((error as { code: string }).code).toBe('invalid_redis_config')
+  })
+
+  it('warns in production when plain text or no password was chosen on purpose', async () => {
+    const remote = makeApp(
+      {},
+      { REDIS_HOST: 'cache.internal', REDIS_TLS: 'false', REDIS_ALLOW_NO_PASSWORD: 'true' },
+      { APP_ENV: 'production' },
+    )
     await remote.app.boot()
     expect(remote.logger.messages('warn')).toEqual(
       expect.arrayContaining(['redis.plaintext', 'redis.no_password']),

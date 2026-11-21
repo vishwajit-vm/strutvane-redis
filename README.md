@@ -48,7 +48,8 @@ for you to do by hand.
 | `REDIS_HOST` / `REDIS_PORT` | `127.0.0.1` / `6379` | |
 | `REDIS_USERNAME` / `REDIS_PASSWORD` | | ACL user (Redis 6+) and password. |
 | `REDIS_DB` | `0` | |
-| `REDIS_TLS` | `false` | `true` for TLS. A `rediss://` URL can't be downgraded with `REDIS_TLS=false` (boot fails). |
+| `REDIS_TLS` | `false` | `true` for TLS. A `rediss://` URL can't be downgraded with `REDIS_TLS=false` (boot fails). In production, a Redis on another machine needs an explicit choice: `true` (or `rediss://`), or `false` to accept plain text on purpose; unset stops boot. |
+| `REDIS_ALLOW_NO_PASSWORD` | `false` | In production, a Redis on another machine needs `REDIS_PASSWORD`; set this to `true` when the server is protected another way. |
 | `REDIS_TLS_CA` / `REDIS_TLS_SERVERNAME` | | A PEM CA file for a private CA; the name the certificate must carry. |
 | `REDIS_PREFIX` | `<app>:<environment>:` | The app name and `APP_ENV` as slugs (`my_blog:production:`). A custom value must be exactly two parts, each ending with `:` (`blog:production:`), so no app's prefix starts another's. In production an app with no `APP_NAME` is refused rather than share `strutvane:`. |
 | `REDIS_CONNECT_TIMEOUT` / `REDIS_COMMAND_TIMEOUT` | `5000` ms | |
@@ -126,7 +127,10 @@ namespace), global keys can't start with `t:`, and flushes match the prefix lite
   `redis.access_denied`.
 - `lock.block()` running out of time: 503 `lock_timeout`.
 - Shutdown closes the connection gracefully (pending replies awaited, bounded).
-- In production, boot warns about plain text to a non-local host and about a missing password.
+- In production, a Redis on another machine (anything but `localhost`, `127.0.0.0/8`, `::1` and
+  `::ffff:127.x.y.z`, in any spelling) stops boot with `invalid_redis_config` unless TLS is chosen
+  explicitly and a password is set (or `REDIS_ALLOW_NO_PASSWORD=true`). Plain text or no password
+  chosen on purpose is still logged as a warning at boot.
 
 ## Queue (experimental)
 

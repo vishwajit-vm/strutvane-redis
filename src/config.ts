@@ -13,7 +13,8 @@
  * | TLS | `tls` | `REDIS_TLS` | `false` (`true` for `rediss://`) |
  * | CA file for TLS | `tls_ca` | `REDIS_TLS_CA` | the system CAs |
  * | TLS server name | `tls_servername` | `REDIS_TLS_SERVERNAME` | the host |
- * | Key prefix | `prefix` | `REDIS_PREFIX` | `<app name slug>:<environment slug>:` |
+ * | Accept no password in production | none | `REDIS_ALLOW_NO_PASSWORD` | `false` |
+ * | Key prefix |`prefix` | `REDIS_PREFIX` | `<app name slug>:<environment slug>:` |
  * | Connect timeout | `connect_timeout` | `REDIS_CONNECT_TIMEOUT` | `5000` ms |
  * | Command timeout | `command_timeout` | `REDIS_COMMAND_TIMEOUT` | `5000` ms |
  *
@@ -25,12 +26,15 @@
  * **Fail closed:** a bad value (a port of `abc`, an unknown URL scheme, `REDIS_TLS=false` with a
  * `rediss://` URL) stops boot with `invalid_redis_config` instead of connecting somewhere
  * unexpected or in plain text. TLS always verifies the server certificate; there is no switch to
- * turn verification off.
+ * turn verification off. In production, a Redis on another machine needs an explicit TLS choice
+ * (`REDIS_TLS=true`, a `rediss://` URL, or `REDIS_TLS=false` on purpose) and a password (or
+ * `REDIS_ALLOW_NO_PASSWORD=true`); see `checkRemoteProduction`.
  *
  * @module
  */
 import { BootError } from '@strutvane/framework'
 import { prefixProblem } from './keys.ts'
+import { isLoopbackHost } from './loopback.ts'
 
 /**
  * The resolved connection settings. `password` and `url` came from the environment and must never
@@ -151,6 +155,18 @@ export function resolveRedisSettings(options: ResolveOptions): RedisSettings {
   }
 
   const environment = options.environment ?? nonEmpty(env['APP_ENV']?.trim()) ?? 'production'
+  // Read (and checked) in every environment, so a typo fails before it reaches production.
+  const allowNoPassword = flag(
+    nonEmpty(env['REDIS_ALLOW_NO_PASSWORD']?.trim()) ?? 'false',
+    'REDIS_ALLOW_NO_PASSWORD',
+  )
+  if (environment === 'production' && !isLoopbackHost(host))
+    checkRemoteProduction({
+      host,
+      tlsChosen: tls || tlsSetting !== undefined,
+      password,
+      allowNoPassword,
+    })
   const prefix = keyPrefix(
     pick('prefix', 'REDIS_PREFIX'),
     options.appName ?? env['APP_NAME'],
@@ -200,6 +216,33 @@ export function describeSettings(settings: RedisSettings): Readonly<Record<strin
     authenticated: settings.password !== undefined,
     prefix: settings.prefix,
   }
+}
+
+/**
+ * Production, and Redis on another machine: the connection crosses a network, so plain text and
+ * a missing password must be explicit choices, never defaults that nobody noticed.
+ *
+ * - **TLS not chosen** (no `rediss://`, no `REDIS_TLS`): refused. `REDIS_TLS=true` encrypts;
+ *   `REDIS_TLS=false` accepts plain text on purpose (a private network the app trusts).
+ * - **No password:** refused unless `REDIS_ALLOW_NO_PASSWORD=true` says the server is protected
+ *   another way (a network policy, a sidecar).
+ */
+function checkRemoteProduction(state: {
+  readonly host: string
+  readonly tlsChosen: boolean
+  readonly password: string | undefined
+  readonly allowNoPassword: boolean
+}): void {
+  if (!state.tlsChosen)
+    throw invalid(
+      `In production, Redis at ${state.host} (another machine) needs an explicit TLS choice.`,
+      'Set REDIS_TLS=true (or use a rediss:// URL). To accept plain text on a private network on purpose, set REDIS_TLS=false.',
+    )
+  if (state.password === undefined && !state.allowNoPassword)
+    throw invalid(
+      `In production, Redis at ${state.host} (another machine) needs a password.`,
+      'Set REDIS_PASSWORD (and an ACL user with REDIS_USERNAME). If the server is protected another way, set REDIS_ALLOW_NO_PASSWORD=true.',
+    )
 }
 
 /** The app part of the prefix when the app has no name. Refused in production. */
