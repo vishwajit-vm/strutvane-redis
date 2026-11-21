@@ -116,6 +116,21 @@ describe.skipIf(skip)(title('RedisCacheStore: the CacheStore contract'), () => {
     expect(await cache.many([])).toEqual({})
   })
 
+  it('returns many() results without a prototype, so any key is a plain entry', async () => {
+    const cache = store()
+    await cache.putMany(JSON.parse('{"__proto__":"p","constructor":"c","toString":"t"}'), 60)
+    const result = await cache.many(['__proto__', 'constructor', 'toString', 'hasOwnProperty'])
+    expect(Object.getPrototypeOf(result)).toBeNull()
+    expect(Object.keys(result).sort()).toEqual(
+      ['__proto__', 'constructor', 'hasOwnProperty', 'toString'].sort(),
+    )
+    expect(Object.getOwnPropertyDescriptor(result, '__proto__')?.value).toBe('p')
+    expect(result['constructor']).toBe('c')
+    expect(result['toString']).toBe('t')
+    expect(result['hasOwnProperty']).toBeUndefined()
+    expect(Object.getPrototypeOf(await cache.many([]))).toBeNull()
+  })
+
   it('remembers and stores forever', async () => {
     const cache = store()
     let calls = 0
@@ -150,11 +165,15 @@ describe.skipIf(skip)(title('RedisCacheStore: the CacheStore contract'), () => {
 
   it('a failing background refresh is logged and keeps serving the stale value', async () => {
     const warnings: string[] = []
+    const contexts: unknown[] = []
     const logger = {
       trace: () => {},
       debug: () => {},
       info: () => {},
-      warn: (msg: string) => void warnings.push(msg),
+      warn: (msg: string, context?: unknown) => {
+        warnings.push(msg)
+        contexts.push(context)
+      },
       error: () => {},
       fatal: () => {},
       child() {
@@ -164,15 +183,19 @@ describe.skipIf(skip)(title('RedisCacheStore: the CacheStore contract'), () => {
       flush: async () => {},
     }
     const cache = new RedisCacheStore({ driver: redis, space: space().area('cache'), logger })
-    expect(await cache.flexible('f', [0.05, 10], () => 'first')).toBe('first')
+    const key = 'user:alice@example.com'
+    expect(await cache.flexible(key, [0.05, 10], () => 'first')).toBe('first')
     await new Promise((resolve) => setTimeout(resolve, 80))
     expect(
-      await cache.flexible('f', [0.05, 10], () => {
+      await cache.flexible(key, [0.05, 10], () => {
         throw new Error('boom')
       }),
     ).toBe('first')
     await new Promise((resolve) => setTimeout(resolve, 500))
     expect(warnings).toEqual(['redis.cache.refresh_failed'])
+    // The log tells keys apart by a digest and never shows the key itself.
+    expect(JSON.stringify(contexts)).not.toContain('alice')
+    expect(contexts[0]).toMatchObject({ key_digest: expect.stringMatching(/^[0-9a-f]{16}$/) })
   })
 
   it('treats a value it did not write (not JSON) as a miss', async () => {

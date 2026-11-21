@@ -16,6 +16,7 @@
  *
  * @module
  */
+import { createHash } from 'node:crypto'
 import type { CacheStore } from '@strutvane/framework'
 import type { Logger } from '@strutvane/framework/contracts'
 import {
@@ -178,13 +179,14 @@ export class RedisCacheStore implements CacheStore {
   }
 
   /**
-   * Several values at once (`MGET`); missing keys are `undefined`.
+   * Several values at once (`MGET`); missing keys are `undefined`. The result has no prototype,
+   * so keys such as `__proto__` or `constructor` are plain entries, never inherited members.
    *
    * @example
    * const { a, b } = await cache.many(['a', 'b'])
    */
   async many(keys: readonly string[]): Promise<Record<string, unknown>> {
-    const result: Record<string, unknown> = {}
+    const result = Object.create(null) as Record<string, unknown>
     if (keys.length === 0) return result
     const replies = asArray(
       await this.#driver.command(['MGET', ...keys.map((key) => this.#space.key(key))]),
@@ -289,9 +291,15 @@ export class RedisCacheStore implements CacheStore {
       }
     } catch (error) {
       // A background refresh must never crash the process; the stale value keeps being served.
-      this.#logger?.warn('redis.cache.refresh_failed', { key, error })
+      // Keys can carry user data (an e-mail, a search), so the log gets a digest, not the key.
+      this.#logger?.warn('redis.cache.refresh_failed', { key_digest: keyDigest(key), error })
     }
   }
+}
+
+/** A short, stable digest of a cache key, to tell keys apart in logs without showing them. */
+function keyDigest(key: string): string {
+  return createHash('sha256').update(key, 'utf8').digest('hex').slice(0, 16)
 }
 
 /** Milliseconds for `PX`, `undefined` for "forever", or `'expired'` for a ttl of 0 or less. */
