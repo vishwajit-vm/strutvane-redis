@@ -69,7 +69,7 @@ describe('RedisServiceProvider', () => {
       session: defineConfig(() => ({ driver: 'redis', lifetime: 30 })),
     })
     await app.boot()
-    expect(app.make(RedisKeySpaceToken).prefix).toBe('provider_test:')
+    expect(app.make(RedisKeySpaceToken).prefix).toBe('provider_test:testing:')
     expect(app.make(RedisLocksToken)).toBeInstanceOf(RedisLocks)
     expect(app.make(RedisRateLimiterToken)).toBeInstanceOf(RedisRateLimiter)
     expect(app.make(CacheManagerToken).store()).toBeInstanceOf(RedisCacheStore)
@@ -108,12 +108,12 @@ describe('RedisServiceProvider', () => {
   })
 
   it('reads settings from config/redis.ts, or Laravel’s database.redis', async () => {
-    const own = makeApp({ redis: defineConfig(() => ({ prefix: 'own:' })) })
+    const own = makeApp({ redis: defineConfig(() => ({ prefix: 'own:x:' })) })
     await own.app.boot()
-    expect(own.app.make(RedisKeySpaceToken).prefix).toBe('own:')
-    const laravel = makeApp({ database: defineConfig(() => ({ redis: { prefix: 'db:' } })) })
+    expect(own.app.make(RedisKeySpaceToken).prefix).toBe('own:x:')
+    const laravel = makeApp({ database: defineConfig(() => ({ redis: { prefix: 'db:x:' } })) })
     await laravel.app.boot()
-    expect(laravel.app.make(RedisKeySpaceToken).prefix).toBe('db:')
+    expect(laravel.app.make(RedisKeySpaceToken).prefix).toBe('db:x:')
   })
 
   it('stops boot on a bad setting (fail closed)', async () => {

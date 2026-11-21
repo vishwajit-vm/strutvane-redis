@@ -7,39 +7,24 @@ import {
   MAX_KEY_BYTES,
   prefixProblem,
 } from '../../src/keys.ts'
-
-/** A minimal Redis-style glob matcher (`*`, `?`, `[...]`, `\` escapes), to check patterns. */
-function globMatch(pattern: string, text: string): boolean {
-  let source = ''
-  for (let i = 0; i < pattern.length; i++) {
-    const char = pattern[i] ?? ''
-    if (char === '\\') source += `\\${pattern[++i] ?? ''}`
-    else if (char === '*') source += '[\\s\\S]*'
-    else if (char === '?') source += '[\\s\\S]'
-    else if (char === '[') {
-      const end = pattern.indexOf(']', i + 1)
-      source += end === -1 ? '\\[' : `[${pattern.slice(i + 1, end).replace(/\\/g, '\\\\')}]`
-      if (end !== -1) i = end
-    } else source += char.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')
-  }
-  return new RegExp(`^${source}$`, 'u').test(text)
-}
+import { globMatch } from '../support/glob.ts'
 
 describe('KeySpace', () => {
   it('builds app, area and tenant keys', () => {
-    const cache = KeySpace.root('blog:').area('cache')
-    expect(cache.key('posts')).toBe('blog:cache:posts')
-    expect(cache.tenant('acme').key('posts')).toBe('blog:cache:t:acme:posts')
+    const cache = KeySpace.root('blog:prod:').area('cache')
+    expect(cache.key('posts')).toBe('blog:prod:cache:posts')
+    expect(cache.tenant('acme').key('posts')).toBe('blog:prod:cache:t:acme:posts')
     expect(cache.tenant('acme').tenantId).toBe('acme')
     expect(cache.tenantId).toBeUndefined()
-    expect(KeySpace.root('').area('lock').key('x')).toBe('lock:x')
-    expect(cache.pattern()).toBe('blog:cache:*')
+    expect(KeySpace.root('blog:prod:').area('lock').key('x')).toBe('blog:prod:lock:x')
+    expect(cache.pattern()).toBe('blog:prod:cache:*')
   })
 
   it('refuses unsafe prefixes, areas, tenants and keys', () => {
-    expect(() => KeySpace.root('a b')).toThrow(TypeError)
-    expect(() => KeySpace.root('x'.repeat(129))).toThrow(TypeError)
-    const root = KeySpace.root('app:')
+    for (const prefix of ['', 'a b', 'blog', 'blog:', 'a::', ':a:', 'a:b:c:', 'a:b', 'a*:b:'])
+      expect(() => KeySpace.root(prefix)).toThrow(TypeError)
+    expect(() => KeySpace.root(`${'x'.repeat(65)}:prod:`)).toThrow(TypeError)
+    const root = KeySpace.root('app:test:')
     for (const area of ['', 'Cache', '1x', 'a:b', 'a*', 'x'.repeat(33)])
       expect(() => root.area(area)).toThrow(TypeError)
     expect(() => root.area('cache').tenant('a').area('x')).toThrow(TypeError)
@@ -49,9 +34,11 @@ describe('KeySpace', () => {
     expect(() => cache.key('t:acme:x')).toThrow(TypeError)
     expect(() => cache.key(1 as unknown as string)).toThrow(TypeError)
     expect(() => cache.key('é'.repeat(MAX_KEY_BYTES / 2 + 1))).toThrow(TypeError)
-    expect(cache.key('k'.repeat(MAX_KEY_BYTES))).toHaveLength(MAX_KEY_BYTES + 'app:cache:'.length)
+    expect(cache.key('k'.repeat(MAX_KEY_BYTES))).toHaveLength(
+      MAX_KEY_BYTES + 'app:test:cache:'.length,
+    )
     expect(cache.tenant('acme').key('t:fine-inside-a-tenant')).toBe(
-      'app:cache:t:acme:t:fine-inside-a-tenant',
+      'app:test:cache:t:acme:t:fine-inside-a-tenant',
     )
   })
 
@@ -60,8 +47,9 @@ describe('KeySpace', () => {
     expect(isValidTenantId('01J9ZK5V8Q')).toBe(true)
     for (const id of ['', 'a:b', 'a b', 'a*', 'a/b', 'a\nb', 'é'])
       expect(isValidTenantId(id)).toBe(false)
-    expect(prefixProblem('blog:v2.prod-1_')).toBeUndefined()
-    expect(prefixProblem('a*b')).toMatch(/may only contain/)
+    expect(prefixProblem('blog:v2.prod-1_:')).toBeUndefined()
+    expect(prefixProblem('blog:')).toMatch(/must be two parts/)
+    expect(prefixProblem('a*b:c:')).toMatch(/must be two parts/)
   })
 
   it('escapes glob characters', () => {
@@ -73,7 +61,7 @@ describe('KeySpace', () => {
   it('no two different (tenant, key) pairs share a full key (property)', () => {
     const tenant = fc.option(fc.stringMatching(/^[A-Za-z0-9_-]{1,12}$/), { nil: undefined })
     const key = fc.string({ minLength: 1, maxLength: 20 })
-    const cache = KeySpace.root('app:').area('cache')
+    const cache = KeySpace.root('app:test:').area('cache')
     const full = (t: string | undefined, k: string): string | undefined => {
       try {
         return (t === undefined ? cache : cache.tenant(t)).key(k)
@@ -95,11 +83,11 @@ describe('KeySpace', () => {
   it("a tenant's flush pattern never matches another tenant's or a global key (property)", () => {
     const id = fc.stringMatching(/^[A-Za-z0-9_-]{1,8}$/)
     const key = fc.string({ minLength: 1, maxLength: 12 })
-    const prefix = fc.stringMatching(/^[A-Za-z0-9_.:*?-]{0,10}$/)
+    const part = fc.stringMatching(/^[A-Za-z0-9_.-]{1,10}$/)
+    const prefix = fc.tuple(part, part).map(([app, env]) => `${app}:${env}:`)
     fc.assert(
-      fc.property(prefix, id, id, key, (rawPrefix, a, b, k) => {
-        const safePrefix = rawPrefix.replace(/[*?]/g, '')
-        const cache = KeySpace.root(safePrefix).area('cache')
+      fc.property(prefix, id, id, key, (appPrefix, a, b, k) => {
+        const cache = KeySpace.root(appPrefix).area('cache')
         const pattern = cache.tenant(a).pattern()
         if (a !== b) expect(globMatch(pattern, cache.tenant(b).key(k))).toBe(false)
         expect(globMatch(pattern, cache.tenant(a).key(k))).toBe(true)

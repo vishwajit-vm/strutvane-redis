@@ -69,7 +69,7 @@ const named = (name: string, message = name, code?: string): Error => {
 }
 
 const settings = (env: Record<string, string> = {}) =>
-  resolveRedisSettings({ env: { REDIS_PREFIX: 'u:', ...env } })
+  resolveRedisSettings({ env: { REDIS_PREFIX: 'u:test:', ...env } })
 
 function harness(
   behaviour: Behaviour = {},

@@ -50,7 +50,7 @@ for you to do by hand.
 | `REDIS_DB` | `0` | |
 | `REDIS_TLS` | `false` | `true` for TLS. A `rediss://` URL can't be downgraded with `REDIS_TLS=false` (boot fails). |
 | `REDIS_TLS_CA` / `REDIS_TLS_SERVERNAME` | | A PEM CA file for a private CA; the name the certificate must carry. |
-| `REDIS_PREFIX` | app name as a slug + `:` | One prefix per app (and per environment) when apps share a server. |
+| `REDIS_PREFIX` | `<app>:<environment>:` | The app name and `APP_ENV` as slugs (`my_blog:production:`). A custom value must be exactly two parts, each ending with `:` (`blog:production:`), so no app's prefix starts another's. In production an app with no `APP_NAME` is refused rather than share `strutvane:`. |
 | `REDIS_CONNECT_TIMEOUT` / `REDIS_COMMAND_TIMEOUT` | `5000` ms | |
 
 `config/redis.ts` (or Laravel's spot, `config/database.ts` → `redis`) may set the non-secret keys;
@@ -96,6 +96,19 @@ if (!limit.allowed) throw new RateLimitedError({ retryAfter: limit.retryAfterSec
 
 With `CACHE_STORE=redis`, the framework's `throttle` middleware counts in Redis, so `throttle:api`
 holds across every server.
+
+### Upgrading from 0.2.0-next.0: the key prefix changed
+
+The default prefix is now `<app>:<environment>:` (it was `<app>:`), and a custom `REDIS_PREFIX`
+must have two parts (`blog:` becomes, say, `blog:production:`). After the upgrade the app doesn't
+see its old keys:
+
+- caches start empty and refill as they're used;
+- signed-in users are signed out once (sessions stored in Redis);
+- held locks, rate-limit counters and idempotency records start over.
+
+The old keys expire on their own TTLs. To remove them sooner, delete `<old prefix>*` with `SCAN` +
+`UNLINK` (never `FLUSHDB` on a shared server).
 
 ### Keys and tenants
 

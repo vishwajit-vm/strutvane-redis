@@ -13,7 +13,7 @@
  * | TLS | `tls` | `REDIS_TLS` | `false` (`true` for `rediss://`) |
  * | CA file for TLS | `tls_ca` | `REDIS_TLS_CA` | the system CAs |
  * | TLS server name | `tls_servername` | `REDIS_TLS_SERVERNAME` | the host |
- * | Key prefix | `prefix` | `REDIS_PREFIX` | the app name as a slug, then `:` |
+ * | Key prefix | `prefix` | `REDIS_PREFIX` | `<app name slug>:<environment slug>:` |
  * | Connect timeout | `connect_timeout` | `REDIS_CONNECT_TIMEOUT` | `5000` ms |
  * | Command timeout | `command_timeout` | `REDIS_COMMAND_TIMEOUT` | `5000` ms |
  *
@@ -85,6 +85,11 @@ export interface ResolveOptions {
   readonly env: Readonly<Record<string, string | undefined>>
   /** The app's name, for the default prefix. */
   readonly appName?: string
+  /**
+   * The app's environment (`app.env`), for the default prefix and the production checks.
+   * Default: `APP_ENV`, else `production` (the framework's own default).
+   */
+  readonly environment?: string
 }
 
 const DEFAULT_TIMEOUT_MS = 5000
@@ -145,10 +150,12 @@ export function resolveRedisSettings(options: ResolveOptions): RedisSettings {
     tls = tls || parsed.tls
   }
 
-  const prefix = pick('prefix', 'REDIS_PREFIX') ?? defaultPrefix(options.appName ?? env['APP_NAME'])
-  const problem = prefixProblem(prefix)
-  if (problem !== undefined)
-    throw invalid(`REDIS_PREFIX ${problem}.`, 'Example: REDIS_PREFIX=blog: (one prefix per app).')
+  const environment = options.environment ?? nonEmpty(env['APP_ENV']?.trim()) ?? 'production'
+  const prefix = keyPrefix(
+    pick('prefix', 'REDIS_PREFIX'),
+    options.appName ?? env['APP_NAME'],
+    environment,
+  )
 
   return Object.freeze({
     host,
@@ -195,21 +202,58 @@ export function describeSettings(settings: RedisSettings): Readonly<Record<strin
   }
 }
 
+/** The app part of the prefix when the app has no name. Refused in production. */
+const FALLBACK_APP = 'strutvane'
+
 /**
- * The default key prefix: the app name as a lowercase slug, then `:` (`My Blog` → `my_blog:`).
+ * The default key prefix: the app name and the environment as lowercase slugs, each followed by
+ * `:` (`My Blog`, `production` → `my_blog:production:`). Two environments of one app sharing a
+ * Redis (staging and production, say) never see each other's keys.
  *
  * @example
- * defaultPrefix('My Blog') // 'my_blog:'
+ * defaultPrefix('My Blog', 'production') // 'my_blog:production:'
+ * defaultPrefix(undefined)               // 'strutvane:production:'
  */
-export function defaultPrefix(appName: string | undefined): string {
-  const slug = (appName ?? '')
+export function defaultPrefix(appName: string | undefined, environment = 'production'): string {
+  return `${slug(appName) || FALLBACK_APP}:${slug(environment) || 'production'}:`
+}
+
+/** A name as a lowercase slug of `a-z 0-9 _`, at most 64 characters (`My Blög!` → `my_blog`). */
+function slug(name: string | undefined): string {
+  return (name ?? '')
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .slice(0, 64)
-  return `${slug === '' ? 'strutvane' : slug}:`
+}
+
+/**
+ * The app's key prefix: `REDIS_PREFIX` when set (checked by {@link prefixProblem}), else
+ * {@link defaultPrefix}. In production an app without a name is refused: every unnamed app on a
+ * shared Redis would otherwise use the same `strutvane:` keys.
+ */
+function keyPrefix(
+  custom: string | undefined,
+  appName: string | undefined,
+  environment: string,
+): string {
+  if (custom !== undefined) {
+    const problem = prefixProblem(custom)
+    if (problem !== undefined)
+      throw invalid(
+        `REDIS_PREFIX ${problem}.`,
+        'Example: REDIS_PREFIX=blog:production: (the app, then the environment).',
+      )
+    return custom
+  }
+  if (environment === 'production' && (slug(appName) || FALLBACK_APP) === FALLBACK_APP)
+    throw invalid(
+      'The Redis key prefix would be the shared fallback "strutvane:", because APP_NAME is not set (or is "Strutvane").',
+      'Set APP_NAME in .env (the prefix becomes <app>:<environment>:), or set REDIS_PREFIX=<app>:<environment>: such as REDIS_PREFIX=blog:production:.',
+    )
+  return defaultPrefix(appName, environment)
 }
 
 interface ParsedUrl {

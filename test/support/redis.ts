@@ -21,7 +21,7 @@ export function title(name: string): string {
 
 /** A fresh app prefix, unique per call. */
 export function uniquePrefix(): string {
-  return `t${randomBytes(5).toString('hex')}:`
+  return `t${randomBytes(5).toString('hex')}:test:`
 }
 
 /** Settings for the test server, plus overrides. */

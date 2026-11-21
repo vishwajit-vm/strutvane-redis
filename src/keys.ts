@@ -6,6 +6,9 @@
  * multi-tenant app must never let tenant A read, overwrite or flush tenant B's entries. Prefixes
  * are how Redis users isolate data; this module makes them impossible to get wrong:
  *
+ * - **App prefixes never overlap.** The app prefix is always exactly two parts, the app and its
+ *   environment, each followed by `:` (`blog:production:`), and a part can't contain `:`. So no
+ *   two different prefixes start one another (`blog:` could otherwise flush `blog:production:`).
  * - **Tenant ids are validated, not escaped.** A tenant id may only contain letters, digits, `_`
  *   and `-` (UUIDs, ULIDs, slugs and numbers fit). A tenant called `a:t:b` could otherwise reach
  *   into another tenant's namespace, so anything else is refused (fail closed).
@@ -27,21 +30,27 @@ export const MAX_KEY_BYTES = 1024
 
 const TENANT_ID = /^[A-Za-z0-9_-]{1,128}$/
 const SEGMENT = /^[a-z][a-z0-9_-]{0,31}$/
-const PREFIX = /^[A-Za-z0-9_.:-]{0,128}$/
+/** An app prefix: two parts of letters, digits and `_ . -` (never `:`), each ending with `:`. */
+const PREFIX = /^[A-Za-z0-9_.-]{1,64}:[A-Za-z0-9_.-]{1,64}:$/
 const TENANT_MARKER = 't:'
 
 /**
- * Check an app prefix (`REDIS_PREFIX`): letters, digits and `_ . : -`, at most 128 characters.
- * Returns an error message, or `undefined` when it is fine.
+ * Check an app prefix (`REDIS_PREFIX`): exactly two parts, the app then the environment, each
+ * followed by `:`; a part is 1 to 64 letters, digits, `_`, `.` or `-`. Returns an error message,
+ * or `undefined` when it is fine.
+ *
+ * **Why exactly two parts:** with a fixed number of `:`-terminated parts, no valid prefix is the
+ * start of another (`blog:` vs `blog:production:`), so one app's flush pattern can never match
+ * another app's keys on a shared Redis.
  *
  * @example
- * prefixProblem('blog:') // undefined
- * prefixProblem('a b')   // 'may only contain …'
+ * prefixProblem('blog:production:') // undefined
+ * prefixProblem('blog:')            // 'must be two parts …'
  */
 export function prefixProblem(prefix: string): string | undefined {
   return PREFIX.test(prefix)
     ? undefined
-    : 'may only contain letters, digits and _ . : - (at most 128 characters)'
+    : 'must be two parts, the app then the environment, each ending with ":" (letters, digits, _ . - only; up to 64 characters each), such as blog:production:'
 }
 
 /**
@@ -70,9 +79,9 @@ export function globEscape(literal: string): string {
  * spaces.
  *
  * @example
- * const cache = KeySpace.root('blog:').area('cache')
- * cache.key('posts')                 // 'blog:cache:posts'
- * cache.tenant('acme').key('posts')  // 'blog:cache:t:acme:posts'
+ * const cache = KeySpace.root('blog:prod:').area('cache')
+ * cache.key('posts')                 // 'blog:prod:cache:posts'
+ * cache.tenant('acme').key('posts')  // 'blog:prod:cache:t:acme:posts'
  */
 export class KeySpace {
   /** The full prefix every key of this space starts with. */
@@ -91,7 +100,7 @@ export class KeySpace {
    * The app-wide root (no area yet). Throws a `TypeError` for an invalid prefix.
    *
    * @example
-   * KeySpace.root('blog:')
+   * KeySpace.root('blog:prod:')
    */
   static root(appPrefix: string): KeySpace {
     const problem = prefixProblem(appPrefix)
@@ -103,7 +112,7 @@ export class KeySpace {
    * A sub-area (`cache`, `lock`, `session`, …): lowercase, starting with a letter.
    *
    * @example
-   * KeySpace.root('blog:').area('lock').key('reports') // 'blog:lock:reports'
+   * KeySpace.root('blog:prod:').area('lock').key('reports') // 'blog:prod:lock:reports'
    */
   area(name: string): KeySpace {
     if (!SEGMENT.test(name))
@@ -137,7 +146,7 @@ export class KeySpace {
    * space) a key that starts with the tenant marker `t:`.
    *
    * @example
-   * KeySpace.root('blog:').area('cache').key('posts:1') // 'blog:cache:posts:1'
+   * KeySpace.root('blog:prod:').area('cache').key('posts:1') // 'blog:prod:cache:posts:1'
    */
   key(key: string): string {
     if (typeof key !== 'string' || key.length === 0)
@@ -156,7 +165,7 @@ export class KeySpace {
    * keys under it too: flushing an area clears it for all tenants).
    *
    * @example
-   * KeySpace.root('a*:').area('cache').pattern() // 'a\\*:cache:*'
+   * KeySpace.root('blog:prod:').area('cache').pattern() // 'blog:prod:cache:*'
    */
   pattern(): string {
     return `${globEscape(this.prefix)}*`

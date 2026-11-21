@@ -232,18 +232,18 @@ describe.skipIf(skip)(title('RedisCacheStore: tenants and key injection'), () =>
   })
 
   it('refuses glob characters in prefixes, so every flush pattern is literal', async () => {
-    expect(() => KeySpace.root('a*:')).toThrow(TypeError)
-    expect(() => KeySpace.root('a?:')).toThrow(TypeError)
-    expect(() => KeySpace.root('[ab]:')).toThrow(TypeError)
+    expect(() => KeySpace.root('a*:test:')).toThrow(TypeError)
+    expect(() => KeySpace.root('a?:test:')).toThrow(TypeError)
+    expect(() => KeySpace.root('[ab]:test:')).toThrow(TypeError)
     // Neighbouring prefixes (app1: and app10:) never flush each other.
     const stamp = Date.now()
     const one = new RedisCacheStore({
       driver: redis,
-      space: KeySpace.root(`app1${stamp}:`).area('cache'),
+      space: KeySpace.root(`app1${stamp}:test:`).area('cache'),
     })
     const ten = new RedisCacheStore({
       driver: redis,
-      space: KeySpace.root(`app1${stamp}0:`).area('cache'),
+      space: KeySpace.root(`app1${stamp}0:test:`).area('cache'),
     })
     await one.put('k', 1)
     await ten.put('k', 2)

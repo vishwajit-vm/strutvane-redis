@@ -100,7 +100,7 @@ describe.skipIf(skip)(title('RedisServiceProvider in an application'), () => {
   })
 
   it('closes its connection on shutdown', async () => {
-    const app = makeApp(`app${randomBytes(4).toString('hex')}:`, { session: 'file' })
+    const app = makeApp(`app${randomBytes(4).toString('hex')}:test:`, { session: 'file' })
     await app.boot()
     const connection = app.make(RedisConnectionToken)
     await connection.command(['PING'])

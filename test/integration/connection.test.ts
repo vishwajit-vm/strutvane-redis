@@ -129,14 +129,14 @@ describe.skipIf(skip || !server.acl)(title('ACL users'), () => {
     const redis = connect({ REDIS_USERNAME: 'limited', REDIS_PASSWORD: 'limited-secret' })
     const allowed = new RedisCacheStore({
       driver: redis,
-      space: KeySpace.root('limited:').area('cache'),
+      space: KeySpace.root('limited:test:').area('cache'),
     })
     await allowed.put('k', 1)
     expect(await allowed.get('k')).toBe(1)
     await allowed.forget('k')
     const denied = new RedisCacheStore({
       driver: redis,
-      space: KeySpace.root('other:').area('cache'),
+      space: KeySpace.root('other:test:').area('cache'),
     })
     expect(code(await denied.put('k', 1).catch((caught: unknown) => caught))).toBe(
       'redis_unavailable',

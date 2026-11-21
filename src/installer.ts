@@ -49,7 +49,8 @@ export default defineConfig(
       tls: env.string('REDIS_TLS', ''),
       /** A PEM CA file for a private CA. */
       tls_ca: env.string('REDIS_TLS_CA', ''),
-      /** Prefix for every key, so apps can share one server. Empty: the app name. */
+      /** Key prefix, so apps can share one server: two parts, such as blog:production:. */
+      /** Empty: <app>:<environment>: (APP_NAME and APP_ENV). */
       prefix: env.string('REDIS_PREFIX', ''),
     }) satisfies RedisConfig,
 )
@@ -229,7 +230,7 @@ export const installer: Installer = {
       {
         key: 'REDIS_PREFIX',
         value: '',
-        comment: 'Key prefix so apps can share one server; empty = the app name.',
+        comment: 'Key prefix, two parts such as blog:production:; empty = <app>:<environment>:.',
       },
     ])
     log.info('Redis is set up. Choose it in .env: CACHE_STORE=redis and/or SESSION_DRIVER=redis.')

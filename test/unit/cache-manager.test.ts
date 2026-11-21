@@ -28,7 +28,7 @@ const manager = (config: unknown) =>
       resolved += 1
       return driver
     },
-    root: KeySpace.root('app:'),
+    root: KeySpace.root('app:test:'),
   })
 
 const bootCode = (run: () => unknown): string => {
@@ -60,9 +60,9 @@ describe('createRedisCacheManager', () => {
     expect(resolved).toBe(0)
     const store = cache.store()
     expect(store).toBeInstanceOf(RedisCacheStore)
-    expect((store as RedisCacheStore).prefix).toBe('app:cache:')
+    expect((store as RedisCacheStore).prefix).toBe('app:test:cache:')
     expect(cache.store('redis')).toBe(store)
-    expect((cache.store('reports') as RedisCacheStore).prefix).toBe('app:reports:')
+    expect((cache.store('reports') as RedisCacheStore).prefix).toBe('app:test:reports:')
     expect(resolved).toBe(2)
     expect(cache.storeNames).toEqual(['file', 'memory', 'redis', 'reports'])
   })

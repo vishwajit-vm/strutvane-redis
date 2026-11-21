@@ -86,10 +86,13 @@ export class RedisServiceProvider extends ServiceProvider {
     const read = (path: string): unknown => (config.has(path) ? config.get(path) : undefined)
     const env = this.#options.env ?? loadRedisEnv(app.basePath)
     const appName = read('app.name')
+    // `app.environment` is only readable after boot; the config tree holds the same value.
+    const environment = read('app.env')
     const settings = resolveRedisSettings({
       config: read('redis') ?? read('database.redis'),
       env,
       ...(typeof appName === 'string' ? { appName } : {}),
+      ...(typeof environment === 'string' && environment !== '' ? { environment } : {}),
     })
     this.#settings = settings
     const root = KeySpace.root(settings.prefix)
