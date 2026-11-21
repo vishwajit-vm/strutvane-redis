@@ -1,4 +1,22 @@
-# NEXT.md: strutvane-redis, branch `v2/redis`
+# NEXT.md: strutvane-redis, branch `fix/hardening-2026-11-20`
+
+## Branch `fix/hardening-2026-11-20` (2026-11-21)
+
+Changeset `redis-prefix-and-production.md` (minor). Commits, one per item:
+
+1. **Key prefix** (`keys.ts`, `config.ts`): `<app>:<environment>:` by default; `REDIS_PREFIX` must be
+   exactly two `:`-terminated parts; production refuses the `strutvane:` fallback. The fixed part
+   count is what makes prefixes prefix-free (a one-part `blog:` would be the start of
+   `blog:production:`). Property test in `test/unit/config.test.ts`. README upgrade note.
+2. **Production checks** (`config.ts`, `loopback.ts`): a remote Redis needs an explicit TLS choice
+   and a password (`REDIS_ALLOW_NO_PASSWORD=true` opts out). Table test `test/unit/production.test.ts`.
+   The provider reads the environment from `app.env` (`app.environment` is only readable after boot).
+3. **Reserved areas** (`areas.ts`, `cache-manager.ts`): guard test `test/unit/areas.test.ts`.
+4. **Queue** (`queue/redis-queue.ts`): `pcall(cjson.decode)`, bad entries to `:failed`.
+5. **Cache store:** `many()` with `Object.create(null)`; `#refresh` logs a key digest.
+
+Gate (2026-11-21, agent-reported): plain `npm ci` OK; `npm run ci` 3x green (10 files, 80 tests, coverage 98.88/94.18/99.08/99.37). **`npm run test:integration` 3x RED: 2 of 153 tests fail each run (not investigated, stopped for the usage limit):**  test/integration/app.test.ts > RedisServiceProvider in an application > binds Redis stores; throttle limits hold across two app servers; test/integration/connection.test.ts > RedisConnection against a real server > fails fast with redis_unavailable when nothing listens, then retries after the pause; Check whether they are the ACL/prefix tests touched by the two-part prefix change (unit test support now uses `<x>:test:` prefixes).
+Next: the coordinator re-runs the gates, then merges into `main` with the release.
 
 Last updated 2026-11-20. Read with `CLAUDE.md`/`.claude/ECOSYSTEM.md` and the hub `STATE.md`.
 

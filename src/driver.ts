@@ -38,7 +38,7 @@ export function defineLua(source: string): LuaScript {
  * What the stores need from a Redis connection.
  *
  * @example
- * const value = await driver.command(['GET', 'blog:cache:posts'])
+ * const value = await driver.command(['GET', 'blog:prod:cache:posts'])
  */
 export interface RedisDriver {
   /** Run one command. Errors are the 503 `redis_unavailable` problem when the server is unreachable. */
