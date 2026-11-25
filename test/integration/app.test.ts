@@ -13,6 +13,7 @@ import {
   defineConfig,
   defineRoutes,
   IdempotencyStoreToken,
+  isBootError,
   Route,
   SessionStoreToken,
 } from '@strutvane/framework'
@@ -64,7 +65,8 @@ function makeApp(prefix: string, options: { readonly session?: string } = {}): A
 
 describe.skipIf(skip)(title('RedisServiceProvider in an application'), () => {
   it('binds Redis stores; throttle limits hold across two app servers', async () => {
-    const prefix = `app${randomBytes(4).toString('hex')}:`
+    // REDIS_PREFIX is two parts, the app then the environment (decision #135).
+    const prefix = `app${randomBytes(4).toString('hex')}:test:`
     const one = makeApp(prefix)
     const two = makeApp(prefix)
     await one.boot()
@@ -97,6 +99,15 @@ describe.skipIf(skip)(title('RedisServiceProvider in an application'), () => {
       (await one.make(RedisRateLimiterToken).hit('x', { max: 1, windowSeconds: 5 })).allowed,
     ).toBe(true)
     await cache.store().flush()
+  })
+
+  it('stops boot on a one-part REDIS_PREFIX, before any key is written (fail closed)', async () => {
+    const app = makeApp(`app${randomBytes(4).toString('hex')}:`)
+    const error = await app.boot().catch((caught: unknown) => caught)
+    expect(isBootError(error)).toBe(true)
+    expect((error as { code: string }).code).toBe('invalid_redis_config')
+    expect(String((error as Error).message)).toMatch(/two parts/)
+    apps.splice(apps.indexOf(app), 1)
   })
 
   it('closes its connection on shutdown', async () => {

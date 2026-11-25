@@ -4,11 +4,10 @@ import { join } from 'node:path'
 import { StrutvaneError } from '@strutvane/framework/core'
 import { afterAll, describe, expect, it } from 'vitest'
 import { RedisCacheStore } from '../../src/cache-store.ts'
-import { resolveRedisSettings } from '../../src/config.ts'
 import { RedisConnection } from '../../src/connection.ts'
 import { defineLua } from '../../src/driver.ts'
 import { KeySpace } from '../../src/keys.ts'
-import { closeAll, connect, server, skip, title } from '../support/redis.ts'
+import { closeAll, connect, server, skip, testSettings, title } from '../support/redis.ts'
 
 afterAll(closeAll)
 
@@ -42,9 +41,9 @@ describe.skipIf(skip)(title('RedisConnection against a real server'), () => {
 
   it('fails fast with redis_unavailable when nothing listens, then retries after the pause', async () => {
     const dead = new RedisConnection(
-      resolveRedisSettings({
-        env: { REDIS_HOST: '127.0.0.1', REDIS_PORT: '1', REDIS_CONNECT_TIMEOUT: '1000' },
-      }),
+      // testSettings gives a unique two-part test prefix: without APP_ENV the settings are
+      // production's, which refuse the shared fallback prefix of an unnamed app.
+      testSettings({ REDIS_HOST: '127.0.0.1', REDIS_PORT: '1', REDIS_CONNECT_TIMEOUT: '1000' }),
       { retryAfterMs: 200 },
     )
     const first = await dead.command(['PING']).catch((caught: unknown) => caught)

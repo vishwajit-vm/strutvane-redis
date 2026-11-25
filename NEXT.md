@@ -15,10 +15,32 @@ Changeset `redis-prefix-and-production.md` (minor). Commits, one per item:
 4. **Queue** (`queue/redis-queue.ts`): `pcall(cjson.decode)`, bad entries to `:failed`.
 5. **Cache store:** `many()` with `Object.create(null)`; `#refresh` logs a key digest.
 
-Gate (2026-11-21, agent-reported): plain `npm ci` OK; `npm run ci` 3x green (10 files, 80 tests, coverage 98.88/94.18/99.08/99.37). **`npm run test:integration` 3x RED: 2 of 153 tests fail each run (not investigated, stopped for the usage limit):**  test/integration/app.test.ts > RedisServiceProvider in an application > binds Redis stores; throttle limits hold across two app servers; test/integration/connection.test.ts > RedisConnection against a real server > fails fast with redis_unavailable when nothing listens, then retries after the pause; Check whether they are the ACL/prefix tests touched by the two-part prefix change (unit test support now uses `<x>:test:` prefixes).
+### Integration fix (2026-11-25)
+
+The 2 integration tests that failed on every run (153 then) were older test setups, not the code;
+the code matches decision #135 and its unit tests:
+
+- `app.test.ts` "binds Redis stores; throttle limits hold across two app servers" passed a one-part
+  `REDIS_PREFIX` (`app<hex>:`), which boot now refuses. It now uses `app<hex>:test:`, and a new test
+  checks that a one-part prefix stops a real app's boot with `invalid_redis_config` (154 tests).
+- `connection.test.ts` "fails fast with redis_unavailable…" built settings with no `APP_ENV` or
+  `APP_NAME`, so they were production's and refused the shared `strutvane:` fallback prefix. It
+  now uses `testSettings()` (a unique `<x>:test:` prefix), like every other suite.
+
+Gate (2026-11-25, Windows, Node 24.21.0, npm 11.19.0, Redis 8.2.10-alpine, agent-reported):
+
+- plain `npm ci`: OK.
+- `npm run ci` 3x green: 10 files, 80/80 tests each run, coverage 98.88/94.18/99.08/99.37.
+- `npm run test:integration` 3x green (18:48–18:50 IST): 17 files, 154/154 each run, coverage
+  99.17/95.42/100/99.73. The uniquely named container was removed after each run.
+- Not counted: an earlier series ran while the laptop was in Modern Standby (16:39–18:46 IST;
+  11 time-outs), and the first run after waking failed 3 server-side expiry checks (a 200 ms lock
+  TTL not yet expired after a 300 ms sleep; Docker's VM clock resyncs after standby). The next
+  5 runs, with no change, were all green.
+
 Next: the coordinator re-runs the gates, then merges into `main` with the release.
 
-Last updated 2026-11-20. Read with `CLAUDE.md`/`.claude/ECOSYSTEM.md` and the hub `STATE.md`.
+Last updated 2026-11-25. Read with `CLAUDE.md`/`.claude/ECOSYSTEM.md` and the hub `STATE.md`.
 
 ## Done
 
